@@ -1,103 +1,115 @@
 # GCP Demo 1: Cloud Storage Bucket
 
-**Objective:** Create a simple Cloud Storage bucket to store files.
-
-## What You'll Learn
-- How to create a GCS bucket with Terraform
-- Basic bucket configuration
-- How to destroy resources when done
-
-## Architecture
-
-```mermaid
-graph TB
-    subgraph "Google Cloud"
-        GCS["Cloud Storage Bucket<br/>demo-bucket"]
-    end
-    
-    User["You"] -->|Upload/Download| GCS
-```
+**Objective:** Create a simple Cloud Storage bucket.
 
 ## Prerequisites
 
+### 1. Install Tools
+
 ```bash
-# 1. Install Terraform
 brew install terraform
-
-# 2. Install Google Cloud SDK
 brew install google-cloud-sdk
+```
 
-# 3. Authenticate with GCP
+### 2. Configure GCP Authentication
+
+**Option A: gcloud CLI (Recommended for local dev)**
+
+```bash
+# Authenticate with your Google account
 gcloud auth application-default login
 
-# 4. Set your project
+# Set your project
 gcloud config set project YOUR_PROJECT_ID
+
+# Verify
+gcloud auth list
+gcloud config get-value project
+```
+
+**Option B: Service Account (Recommended for CI/CD)**
+
+```bash
+# Create a service account
+gcloud iam service-accounts create terraform-sa \
+    --display-name="Terraform Service Account"
+
+# Grant permissions
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:terraform-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/storage.admin"
+
+# Download key
+gcloud iam service-accounts keys create terraform-key.json \
+    --iam-account=terraform-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+# Set environment variable
+export GOOGLE_APPLICATION_CREDENTIALS=./terraform-key.json
+```
+
+**Option C: Using a Service Account Key File**
+
+```bash
+# Export the key file path
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/your/service-account-key.json
+
+# Or set in Terraform
+export GOOGLE_PROJECT=your-project-id
+```
+
+### 3. Enable Required APIs
+
+```bash
+gcloud services enable storage.googleapis.com container.googleapis.com compute.googleapis.com
 ```
 
 ## Step-by-Step
 
-### Step 1: Initialize Terraform
+### Step 1: Update Variables
+
+Edit `variables.tf` and set your project ID:
+
+```hcl
+variable "project_id" {
+  default = "your-actual-project-id"  # CHANGE THIS!
+}
+```
+
+### Step 2: Initialize Terraform
 
 ```bash
 cd demo1-gcs
 terraform init
 ```
 
-### Step 2: Review the Plan
+### Step 3: Apply
 
 ```bash
 terraform plan
-```
-
-This shows what will be created:
-- 1 Cloud Storage bucket
-- Location: us-central1
-
-### Step 3: Apply the Changes
-
-```bash
 terraform apply
 ```
 
-Type `yes` when prompted.
-
-### Step 4: Verify the Bucket
+### Step 4: Test
 
 ```bash
-# List your buckets
-gsutil ls
-
-# Check bucket details
-gsutil ls -L gs://demo-bucket-terraform/
+echo "Hello!" > test.txt
+gsutil cp test.txt gs://your-bucket-name/
+gsutil ls gs://your-bucket-name/
 ```
 
-### Step 5: Upload a Test File
-
-```bash
-echo "Hello from Terraform!" > test.txt
-gsutil cp test.txt gs://demo-bucket-terraform/
-gsutil ls gs://demo-bucket-terraform/
-```
-
-### Step 6: Destroy (Clean Up)
+### Step 5: Destroy
 
 ```bash
 terraform destroy
 ```
 
-Type `yes` to confirm.
+## Authentication Reference
 
-## Files Explained
-
-| File | Purpose |
-|------|---------|
-| `main.tf` | Defines the GCS bucket resource |
-| `variables.tf` | Configurable options |
-| `outputs.tf` | Shows bucket URL after creation |
-| `versions.tf` | Terraform version requirements |
+| Method | Best For | Command |
+|--------|----------|---------|
+| `gcloud auth adc` | Local development | `gcloud auth application-default login` |
+| Service Account | CI/CD, production | Set `GOOGLE_APPLICATION_CREDENTIALS` |
+| JSON Key File | Manual deployment | Export key path |
 
 ## Next Steps
-
-✅ **Completed:** You created a Cloud Storage bucket!
-
-➡️ **Next:** [Demo 2: VPC + Compute Engine](../demo2-vpc-compute/README.md)
+➡️ [Demo 2: VPC + Compute Engine](../demo2-vpc-compute/README.md)

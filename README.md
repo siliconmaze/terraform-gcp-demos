@@ -2,74 +2,81 @@
 
 Simple, step-by-step Terraform demos for Google Cloud Platform.
 
+## Authentication Setup
+
+### Option 1: gcloud CLI (Recommended for local)
+
+```bash
+# Install Google Cloud SDK
+brew install google-cloud-sdk
+
+# Authenticate with your Google account
+gcloud auth application-default login
+
+# Set your project
+gcloud config set project YOUR_PROJECT_ID
+
+# Verify
+gcloud auth list
+gcloud config get-value project
+```
+
+### Option 2: Service Account (Recommended for CI/CD)
+
+```bash
+# Create a service account
+gcloud iam service-accounts create terraform-sa \
+    --display-name="Terraform Service Account"
+
+# Grant roles
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:terraform-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/storage.admin"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:terraform-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/compute.admin"
+
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:terraform-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="roles/container.admin"
+
+# Download key
+gcloud iam service-accounts keys create terraform-key.json \
+    --iam-account=terraform-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com
+
+# Set environment variable
+export GOOGLE_APPLICATION_CREDENTIALS=./terraform-key.json
+```
+
+### Enable Required APIs
+
+```bash
+gcloud services enable storage.googleapis.com compute.googleapis.com container.googleapis.com
+```
+
 ## Demos
 
-### Demo 1: Cloud Storage Bucket
-**Objective:** Create a simple Cloud Storage bucket.
+| Demo | Description | Complexity | Cost |
+|------|-------------|------------|------|
+| [demo1-gcs](demo1-gcs/README.md) | Cloud Storage Bucket | ⭐ | Free |
+| [demo2-vpc-compute](demo2-vpc-compute/README.md) | VPC + Compute | ⭐⭐ | Free tier |
+| [demo3-gke](demo3-gke/README.md) | GKE Cluster | ⭐⭐⭐ | ~$3-5/day |
 
-📖 [Read the Guide](demo1-gcs/README.md)
-
-```bash
-cd demo1-gcs
-terraform init
-terraform plan
-terraform apply
-```
-
----
-
-### Demo 2: VPC + Compute Engine
-**Objective:** Create a VPC with a virtual machine.
-
-📖 [Read the Guide](demo2-vpc-compute/README.md)
+## Quick Start
 
 ```bash
-cd demo2-vpc-compute
-terraform init
-terraform apply
-gcloud compute ssh demo-instance --zone=us-central1-a
-```
-
----
-
-### Demo 3: GKE Cluster
-**Objective:** Create a managed Kubernetes cluster.
-
-📖 [Read the Guide](demo3-gke/README.md)
-
-```bash
-cd demo3-gke
-terraform init
-terraform apply  # Takes ~10 minutes!
-gcloud container clusters get-credentials demo-cluster --region us-central1
-```
-
----
-
-## Quick Reference
-
-| Demo | Service | Complexity | Cost |
-|------|---------|------------|------|
-| 1 | Cloud Storage | ⭐ | Free |
-| 2 | VPC + Compute | ⭐⭐ | Free tier |
-| 3 | GKE | ⭐⭐⭐ | ~$3-5/day |
-
-## Prerequisites
-
-```bash
-# Install Terraform
+# Install tools
 brew install terraform
-
-# Install Google Cloud SDK
 brew install google-cloud-sdk
 
 # Authenticate
 gcloud auth application-default login
-```
+gcloud config set project YOUR_PROJECT_ID
 
-## Cleanup
-
-Always destroy resources when done:
-```bash
+# Run a demo
+cd demo1-gcs
+terraform init
+terraform apply
 terraform destroy
 ```
