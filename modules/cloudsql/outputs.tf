@@ -1,0 +1,9 @@
+output "instance_name" { value = google_sql_database_instance.main.name }
+output "instance_id" { value = google_sql_database_instance.main.id }
+output "connection_string" { value = google_sql_database_instance.main.connection_name }
+output "public_ip" { value = google_sql_database_instance.main.public_ip_address }
+output "private_ip" { value = google_sql_database_instance.main.private_ip_address }
+output "database_name" { value = google_sql_database.main.name }
+output "database_id" { value = google_sql_database.main.id }
+output "service_account_email" { value = try(google_service_account.cloudsql[0].email, "") }
+output "first_ip" { value = google_sql_database_instance.main.first_ip_address }

@@ -1,0 +1,35 @@
+# =============================================================================
+# Remote State Configuration - GCP
+# Production pattern: GCS bucket for state storage
+# =============================================================================
+
+terraform {
+  backend "gcs" {
+    # Bucket must exist before running Terraform
+    bucket = "my-project-terraform-state"
+    prefix = "environments/${terraform.workspace}"
+  }
+}
+
+# =============================================================================
+# State Management Best Practices - GCP
+# =============================================================================
+#
+# 1. Create GCS bucket for state storage:
+#    gcloud storage buckets create gs://my-project-terraform-state \
+#      --location=us-central1 \
+#      --default-storage-class=STANDARD \
+#      --uniform-bucket-level-access
+#
+# 2. Enable versioning:
+#    gcloud storage buckets update gs://my-project-terraform-state \
+#      --versioning
+#
+# 3. Set lifecycle policy for old state versions:
+#    gcloud storage buckets update gs://my-project-terraform-state \
+#      --lifecycle-file=lifecycle.json
+#
+# 4. Restrict access with IAM:
+#    gcloud storage buckets add-iam-policy-binding gs://my-project-terraform-state \
+#      --member=serviceAccount:your-sa@project.iam.gserviceaccount.com \
+#      --role=roles/storage.objectAdmin
