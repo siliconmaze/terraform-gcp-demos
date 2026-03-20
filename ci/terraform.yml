@@ -1,0 +1,197 @@
+# Terraform CI/CD Pipeline
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.tf'
+      - '**.tfvars'
+      - 'ci/**'
+  push:
+    branches: [main]
+    paths:
+      - '**.tf'
+      - '**.tfvars'
+      - 'ci/**'
+
+env:
+  TF_VERSION: '1.5'
+  AWS_REGION: 'us-east-1'
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive
+        working-directory: .
+      
+      - name: Terraform Init
+        run: terraform init -backend=false
+        working-directory: environments/dev/aws-vpc
+      
+      - name: Terraform Validate
+        run: terraform validate
+        working-directory: environments/dev/aws-vpc
+      
+      - name: Checkov Security Scan
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: terraform
+      
+      - name: Terrascan
+        uses: accurics/terrascan-action@v1
+        
+      - name: tflint
+        uses: terraform-linters/setup-tflint@v3
+        with:
+          tflint_version: v0.47
+      
+      - name: Run tflint
+        run: tflint --module
+
+  plan:
+    name: Plan
+    needs: validate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Init
+        run: terraform init
+        working-directory: environments/dev/aws-vpc
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -no-color
+        working-directory: environments/dev/aws-vpc
+        continue-on-error: true
+      
+      - name: Post Plan Comment
+        uses: actions/github-script@v7
+        if: github.event_name == 'pull_request'
+        with:
+          script: |
+            const output = `#### Terraform Format and Style 🖌️\${{ steps.plan.outcome }}
+            
+            #### Terraform Initialization ⚙️\${{ steps.init.outcome }}
+            
+            #### Terraform Validation 🤖\${{ steps.validate.outcome }}
+            
+            <details><summary>Plan Output</summary>
+            
+            \`\`\`terraform
+            ${{ steps.plan.outputs.stdout }}
+            \`\`\`
+            
+            </details>
+            
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            github.rest.issues.createComment({
+              issue_number: ${{ github.event.pull_request.number }},
+              owner: '${{ github.repository_owner }}',
+              repo: '${{ github.event.repository.name }}',
+              body: output
+            })
+
+  apply-dev:
+    name: Apply Dev
+    needs: plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: dev
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Init
+        run: terraform init
+        working-directory: environments/dev/aws-vpc
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: environments/dev/aws-vpc
+
+  apply-prod:
+    name: Apply Prod
+    needs: apply-dev
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: prod
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_PROD_ROLE_ARN }}
+      
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Init
+        run: terraform init
+        working-directory: environments/prod/aws-vpc
+        env:
+          TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      
+      - name: Terraform Plan
+        run: terraform plan
+        working-directory: environments/prod/aws-vpc
+      
+      - name: Terraform Apply (Manual Approval)
+        run: terraform apply -auto-approve
+        working-directory: environments/prod/aws-vpc
